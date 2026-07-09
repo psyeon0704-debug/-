@@ -167,12 +167,18 @@
         <p class="sec-title">1. 매물 주소</p>
         <p class="sec-desc">주소를 검색하면 지역·주택유형·연식·시세를 자동으로 조회해요.</p>
 
-        <div class="search-row">
-          <input id="addr-input" type="text" placeholder="인천 미추홀구 주안동" />
-          <button id="addr-search">검색</button>
+        <button class="btn" id="open-kakao" style="margin-top:14px; height:48px; font-size:15px;">주소 검색하기</button>
+        <div id="kakao-layer" style="display:none; margin-top:12px; border:1px solid var(--g200); border-radius:14px; overflow:hidden; height:420px;"></div>
+        <button class="rebtn" id="use-osm" style="display:block;">카카오 검색이 안 열리나요? 간편 검색 사용</button>
+
+        <div id="osm-box" class="hide">
+          <div class="search-row">
+            <input id="addr-input" type="text" placeholder="인천 미추홀구 주안동" />
+            <button id="addr-search">검색</button>
+          </div>
+          <p class="search-hint">동 이름까지 입력하면 잘 찾아요. 예: 서울 관악구 신림동</p>
+          <div class="results" id="addr-results"></div>
         </div>
-        <p class="search-hint">동 이름까지 입력하면 잘 찾아요. 예: 서울 관악구 신림동</p>
-        <div class="results" id="addr-results"></div>
 
         <div class="addr-selected" id="addr-selected">
           <div class="addr-line">
@@ -221,13 +227,66 @@
 
   </div>
 
-  <p class="foot">전세탐정 프로토타입 데모 — 주소 검색은 오픈스트리트맵(Nominatim) API로 실제 작동해요. 실서비스는 행안부 도로명주소 API로 대체돼요.<br/>건축물대장·실거래 시세 조회와 위험도 계산은 흐름 시연용 시뮬레이션이며, 실제 서비스는 국토부 API와 학습된 AI 모델로 작동해요.</p>
+  <p class="foot">전세탐정 프로토타입 데모 — 주소 검색은 카카오 우편번호 서비스로 실제 작동하며, 미지원 환경에서는 오픈스트리트맵 검색으로 자동 전환돼요.<br/>건축물대장·실거래 시세 조회와 위험도 계산은 흐름 시연용 시뮬레이션이며, 실제 서비스는 국토부 API와 학습된 AI 모델로 작동해요.</p>
 </div>
 
+<script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <script>
 (function(){
   function $(id){return document.getElementById(id);}
   var ADDR = null, P = null;
+
+  function showOsm(withNotice){
+    $('kakao-layer').style.display = 'none';
+    $('open-kakao').style.display = 'none';
+    $('use-osm').style.display = 'none';
+    $('osm-box').classList.remove('hide');
+    if(withNotice){
+      $('addr-results').innerHTML = '<p class="noresult">카카오 검색을 불러오지 못해 간편 검색으로 전환했어요.</p>';
+    }
+    $('addr-input').focus();
+  }
+
+  function onKakaoSelect(data){
+    ADDR = {
+      display: data.roadAddress || data.jibunAddress,
+      sido: shortSido(data.sido),
+      gu: data.sigungu || "",
+      dong: data.bname || data.sigungu || ""
+    };
+    var sel = $('in-type');
+    if(data.apartment === 'Y'){ sel.value = "0.15"; }
+    else if(/오피스텔/.test(data.buildingName||"")){ sel.value = "0.55"; }
+    $('kakao-layer').style.display = 'none';
+    $('addr-road').textContent = data.roadAddress || data.jibunAddress;
+    $('addr-jibun').textContent = data.buildingName ? data.buildingName : ("지번 · " + (data.jibunAddress || "-"));
+    renderAuto();
+    $('addr-selected').style.display = 'block';
+    var btn = $('run'); btn.disabled = false; btn.textContent = "위험도 분석하기";
+  }
+
+  function openKakao(){
+    if(typeof daum === 'undefined' || !daum.Postcode){ showOsm(true); return; }
+    var layer = $('kakao-layer');
+    layer.innerHTML = '';
+    layer.style.display = 'block';
+    $('addr-selected').style.display = 'none';
+    new daum.Postcode({ oncomplete: onKakaoSelect, width:'100%', height:'100%' }).embed(layer);
+    var f = layer.querySelector('iframe');
+    setTimeout(function(){
+      if(ADDR || !f) return;
+      var stillBlank = false;
+      try {
+        var doc = f.contentDocument;
+        if(doc){
+          var inner = doc.querySelector('iframe');
+          if(!inner){ stillBlank = true; }
+          else { stillBlank = !!inner.contentDocument; }
+        }
+      } catch(e) { stillBlank = false; }
+      if(stillBlank){ showOsm(true); }
+    }, 4000);
+  }
 
   function hash(s){ var h=0; for(var i=0;i<s.length;i++){ h=((h<<5)-h+s.charCodeAt(i))|0; } return Math.abs(h); }
 
@@ -402,10 +461,12 @@
 
   $('addr-search').addEventListener('click', searchAddr);
   $('addr-input').addEventListener('keydown', function(e){ if(e.key==='Enter') searchAddr(); });
+  $('open-kakao').addEventListener('click', openKakao);
+  $('use-osm').addEventListener('click', function(){ showOsm(false); });
   $('re-addr').addEventListener('click', function(){
     $('addr-selected').style.display='none'; ADDR=null; P=null;
     var btn=$('run'); btn.disabled=true; btn.textContent="주소를 먼저 검색하세요";
-    $('addr-input').focus();
+    if($('osm-box').classList.contains('hide')){ openKakao(); } else { $('addr-input').focus(); }
   });
   $('in-type').addEventListener('change', function(){ if(ADDR){ renderAuto(); } });
   $('run').addEventListener('click', analyze);
