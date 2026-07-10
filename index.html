@@ -205,6 +205,10 @@
             <option value="0.20">주상복합</option>
           </select>
         </label>
+        <p class="subnote" id="type-hint" style="display:none; color:var(--orange-text); font-weight:600;">주소만으로 유형을 확정할 수 없어요. 매물의 실제 유형을 확인하고 선택해 주세요.</p>
+        <label class="fld">주택 가격 (만원) <span style="font-weight:400;color:var(--g400);">(자동 추정 · 수정 가능)</span>
+          <input id="in-price" type="number" value="" step="1000" placeholder="주소 선택 시 자동 입력" />
+        </label>
         <label class="fld">임대보증금 (만원)
           <input id="in-deposit" type="number" value="18000" step="1000" />
         </label>
@@ -248,15 +252,16 @@
   }
 
   function onKakaoSelect(data){
+    priceDirty = false;
     ADDR = {
       display: data.roadAddress || data.jibunAddress,
       sido: shortSido(data.sido),
       gu: data.sigungu || "",
       dong: data.bname || data.sigungu || ""
     };
-    var sel = $('in-type');
-    if(data.apartment === 'Y'){ sel.value = "0.15"; }
-    else if(/오피스텔/.test(data.buildingName||"")){ sel.value = "0.55"; }
+    var g = guessType(data.buildingName);
+    if(g){ $('in-type').value = g; typeConfirm(false); }
+    else { typeConfirm(true); }
     $('kakao-layer').style.display = 'none';
     $('addr-road').textContent = data.roadAddress || data.jibunAddress;
     $('addr-jibun').textContent = data.buildingName ? data.buildingName : ("지번 · " + (data.jibunAddress || "-"));
@@ -315,8 +320,25 @@
     };
   }
 
+  var priceDirty = false;
+
+  function guessType(bn){
+    bn = bn || '';
+    if(/오피스텔/.test(bn)) return "0.55";
+    if(/아파트|APT/i.test(bn)) return "0.15";
+    if(/빌라|맨션|하이츠|팰리스|연립/.test(bn)) return "0.50";
+    if(/자이|래미안|푸르지오|힐스테이트|아이파크|롯데캐슬|더샵|이편한세상|e편한세상|위브|주공|데시앙|베르디움|비발디/.test(bn)) return "0.15";
+    return null;
+  }
+
+  function typeConfirm(need){
+    $('in-type').style.borderColor = need ? 'var(--orange)' : '';
+    $('type-hint').style.display = need ? 'block' : 'none';
+  }
+
   function renderAuto(){
     P = buildProfile();
+    if(!priceDirty){ $('in-price').value = P.estPrice; }
     var items = [
       {k:"지역", v:ADDR.sido+" · "+ADDR.dong, tag:"주소 API"},
       {k:"주택유형", v:P.type, tag:"건축물대장"},
@@ -356,6 +378,7 @@
           el.addEventListener('click', function(){
             var it = list[+el.dataset.i];
             var a = it.address || {};
+            priceDirty = false;
             ADDR = {
               display: it.display_name,
               sido: shortSido(a.city || a.province || a.state || ""),
@@ -364,6 +387,7 @@
             };
             $('addr-road').textContent = [a.city||a.province||"", ADDR.gu, ADDR.dong].filter(Boolean).join(" ");
             $('addr-jibun').textContent = "우편번호 " + (a.postcode || "-");
+            typeConfirm(true);
             box.innerHTML = '';
             $('addr-input').value = '';
             renderAuto();
@@ -400,7 +424,7 @@
     renderAuto();
     var deposit=Math.max(1,+$('in-deposit').value);
     var senior=Math.max(0,+$('in-senior').value);
-    var price=P.estPrice;
+    var price=(+$('in-price').value > 0) ? +$('in-price').value : P.estPrice;
     var jeonse=deposit/price, debt=(deposit+senior)/price, sr=senior/price;
     var marketRatio=deposit/P.avgDeposit;
 
@@ -446,7 +470,7 @@
       +'<div class="market">'
       +'<div class="m-item"><div class="k">동네 평균 전세</div><div class="v">'+P.avgDeposit.toLocaleString()+'<small> 만원</small></div></div>'
       +'<div class="m-item"><div class="k">내 보증금</div><div class="v">'+deposit.toLocaleString()+'<small> 만원</small></div></div>'
-      +'<div class="m-item"><div class="k">추정 주택가격</div><div class="v">'+P.estPrice.toLocaleString()+'<small> 만원</small></div></div>'
+      +'<div class="m-item"><div class="k">주택 가격'+(priceDirty?'':' (추정)')+'</div><div class="v">'+price.toLocaleString()+'<small> 만원</small></div></div>'
       +'<div class="m-item"><div class="k">지역 거래량</div><div class="v">'+P.volume.toLocaleString()+'<small> 건/월</small></div></div>'
       +'<div class="m-item"><div class="k">준공연도</div><div class="v">'+P.buildYear+'<small> 년</small></div></div>'
       +'<div class="m-item"><div class="k">전용면적</div><div class="v">'+P.area+'<small> ㎡</small></div></div>'
@@ -468,7 +492,8 @@
     var btn=$('run'); btn.disabled=true; btn.textContent="주소를 먼저 검색하세요";
     if($('osm-box').classList.contains('hide')){ openKakao(); } else { $('addr-input').focus(); }
   });
-  $('in-type').addEventListener('change', function(){ if(ADDR){ renderAuto(); } });
+  $('in-type').addEventListener('change', function(){ typeConfirm(false); if(ADDR){ renderAuto(); } });
+  $('in-price').addEventListener('input', function(){ priceDirty = true; });
   $('run').addEventListener('click', analyze);
 })();
 </script>
