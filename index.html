@@ -609,8 +609,10 @@
     names.forEach(name => {
       let category = null;
 
-      if (/전세가율|동네 시세/.test(name)) {
-        category = "보증금과 시세";
+      if (/전세가율/.test(name)) {
+        category = "깡통·회수여력";       // 집값 대비 보증금(회수 여력)
+      } else if (/동네 시세/.test(name)) {
+        category = "보증금과 시세";        // 동네 시세 대비 보증금
       } else if (/선순위채권/.test(name)) {
         category = "선순위 권리";
       } else if (/주택 유형|준공/.test(name)) {
@@ -626,12 +628,14 @@
   }
 
   function currentGrade() {
-    const pill = document.querySelector("#result-panel .pill");
-    if (!pill) return "";
-
-    return pill.textContent
-      .replace("위험 등급", "")
-      .trim();
+    // 대시보드 점수(0~100)를 템플릿 4등급(안전/관심/주의/위험)으로 매핑
+    const el = document.querySelector("#result-panel .score-num");
+    if (!el) return "";
+    const score = parseInt(el.textContent, 10) || 0;
+    if (score < 30) return "안전";
+    if (score < 50) return "관심";
+    if (score < 70) return "주의";
+    return "위험";
   }
 
   function chooseTemplate(grade, categories) {
@@ -647,10 +651,13 @@
         const matched = templateCategories.filter(
           category => categories.includes(category)
         ).length;
+        const extras = templateCategories.length - matched;   // 템플릿에만 있는 카테고리
+        const missing = categories.length - matched;          // 매물에만 있는 카테고리
 
+        // 카테고리 적합도가 지배하고, listing_count는 동점 시 tie-breaker로만 사용
         return {
           item,
-          score: matched * 100 + (item.pattern?.listing_count || 0)
+          score: matched * 1e6 - extras * 2000 - missing * 1000 + (item.pattern?.listing_count || 0)
         };
       })
       .sort((a, b) => b.score - a.score)[0]?.item;
