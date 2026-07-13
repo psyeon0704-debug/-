@@ -718,7 +718,7 @@
             <span class="fname">${escapeHtml(factor.title)}</span>
             <span class="fbadge" style="background:#eaf2ff;color:#1b64da;">공식 근거 확인</span>
           </div>
-          <p class="detail">${escapeHtml(factor.body)}</p>
+          <p class="detail" style="white-space:pre-line;">${escapeHtml(factor.body).trim()}</p>
           ${links}
         </div>
       `;
@@ -732,7 +732,7 @@
         </div>
       `).join("");
 
-    resultPanel.insertAdjacentHTML("beforeend", `
+    const reportHtml = `
       <div class="card" id="auto-rag-report" data-signature="${escapeHtml(signature)}">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <p class="sec-title">AI 탐정 리포트</p>
@@ -747,7 +747,7 @@
         </p>
 
         <p class="verdict" style="margin-top:12px;">${escapeHtml(report.headline)}</p>
-        <p class="detail">${escapeHtml(report.summary)}</p>
+        <p class="detail" style="white-space:pre-line;">${escapeHtml(report.summary).trim()}</p>
 
         <p class="sec-title" style="margin-top:18px;">추가로 확인할 내용</p>
         ${factors}
@@ -759,7 +759,15 @@
           ${escapeHtml(report.disclaimer)}
         </p>
       </div>
-    `);
+    `;
+
+    // 위험도 카드(첫 번째 카드) 바로 아래에 삽입
+    const anchor = resultPanel.querySelector(":scope > .card");
+    if (anchor) {
+      anchor.insertAdjacentHTML("afterend", reportHtml);
+    } else {
+      resultPanel.insertAdjacentHTML("beforeend", reportHtml);
+    }
   }
 
   // 기존에 있던 대표 사례 탭은 중복 방지를 위해 숨깁니다.
